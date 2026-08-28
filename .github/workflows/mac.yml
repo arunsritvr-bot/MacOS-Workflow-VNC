@@ -8,23 +8,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure macOS Desktop & Screen Sharing
+      - name: Configure macOS GUI & Screen Sharing
         run: |
           sudo mdutil -i off -a
           
-          # Create user with sysadminctl
+          # Create vncuser
           sudo sysadminctl -addUser vncuser -fullName "VNC User" -password "${{ secrets.VNC_USER_PASSWORD }}" -admin
           
-          # Enable Apple Remote Desktop / Screen Sharing for vncuser
+          # Enable Auto-Login for GUI session
+          sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
+          
+          # Enable Apple Remote Desktop / VNC
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -users vncuser -privs -all -restart -agent -menu
+            -activate -configure -access -on -users runner,vncuser -privs -all -restart -agent -menu
 
           # Set legacy VNC password
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
 
-          # Restart remote agent
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
+          # Wake display & launch GUI shell
+          sudo caffeinate -dimsu -t 21600 &
+          open -a Finder
 
       - name: Start Cloudflare Tunnel
         run: |

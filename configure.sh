@@ -25,6 +25,7 @@ echo "$2" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
 
-#Start free TCP tunnel with Pinggy (No card or signup needed)
-ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:5900 tcp@a.pinggy.io > pinggy.log 2>&1 &sleep 6
-cat pinggy.log
+#Start free TCP tunnel with Serveo
+ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:5900 serveo.net > serveo.log 2>&1 &
+sleep 5
+cat serveo.log

@@ -8,27 +8,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure macOS GUI & Screen Sharing
+      - name: Initialize macOS Virtual Display & Screen Sharing
         run: |
           sudo mdutil -i off -a
-          
-          # Create vncuser
-          sudo sysadminctl -addUser vncuser -fullName "VNC User" -password "${{ secrets.VNC_USER_PASSWORD }}" -admin
-          
-          # Enable Auto-Login for GUI session
+
+          # Set password for runner user
+          sudo dscl . -passwd /Users/runner "${{ secrets.VNC_USER_PASSWORD }}"
+
+          # Force GUI automatic login for runner
           sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
-          
-          # Enable Apple Remote Desktop / VNC
+
+          # Configure Apple Remote Desktop and Screen Sharing
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -users runner,vncuser -privs -all -restart -agent -menu
+            -activate -configure -access -on -users runner -privs -all -restart -agent -console
 
           # Set legacy VNC password
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
 
-          # Wake display & launch GUI shell
-          sudo caffeinate -dimsu -t 21600 &
-          open -a Finder
+          # Launch Aqua GUI environment and wake the display
+          sudo caffeinate -u -t 21600 &
+          sudo killall WindowServer || true
 
       - name: Start Cloudflare Tunnel
         run: |
@@ -40,6 +40,6 @@ jobs:
       - name: Keep Alive
         run: |
           echo "=========================================="
-          echo "VNC session is active"
+          echo "macOS GUI desktop is initialized and running"
           echo "=========================================="
           sleep 21600

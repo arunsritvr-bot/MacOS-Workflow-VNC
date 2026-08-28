@@ -4,7 +4,7 @@ on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -12,21 +12,18 @@ jobs:
         run: |
           sudo mdutil -i off -a
           
-          # 1. Create dedicated user using sysadminctl (avoids password failure)
-          sudo sysadminctl -addUser vncuser -fullName "VNC User" -password "${{ secrets.VNC_USER_PASSWORD }}" -admin
+          # Set password for runner
+          echo "${{ secrets.VNC_USER_PASSWORD }}" | sudo passwd -u runner
           
-          # 2. Enable GUI auto-login to render the desktop
-          sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "vncuser"
-          
-          # 3. Enable Apple Remote Desktop / Screen Sharing
+          # Enable Apple Remote Desktop / VNC
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -users vncuser -privs -all -restart -agent -menu
+            -activate -configure -access -on -users runner -privs -all -restart -agent -menu
 
-          # 4. Set legacy VNC password
+          # Set legacy VNC password
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
 
-          # 5. Prevent sleep and force UI session awake
+          # Start UI session awake
           sudo caffeinate -dimsu -w $$ &
 
       - name: Start Cloudflare Tunnel

@@ -1,4 +1,4 @@
-#configure.sh VNC_USER_PASSWORD VNC_PASSWORD NGROK_AUTH_TOKEN
+#!/bin/bash
 
 #disable spotlight indexing
 sudo mdutil -i off -a
@@ -10,24 +10,22 @@ sudo dscl . -create /Users/vncuser RealName "VNC User"
 sudo dscl . -create /Users/vncuser UniqueID 1001
 sudo dscl . -create /Users/vncuser PrimaryGroupID 80
 sudo dscl . -create /Users/vncuser NFSHomeDirectory /Users/vncuser
-sudo dscl . -passwd /Users/vncuser $1
-sudo dscl . -passwd /Users/vncuser $1
+sudo dscl . -passwd /Users/vncuser "$1"
+sudo dscl . -passwd /Users/vncuser "$1"
 sudo createhomedir -c -u vncuser > /dev/null
 
 #Enable VNC
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -allowAccessFor -allUsers -privs -all
-sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes 
+sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes
 
-#VNC password - http://hints.macworld.com/article.php?story=20071103011608872
-echo $2 | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
+#VNC password
+echo "$2" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
 
 #Start VNC/reset changes
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
 
-#install ngrok
-brew install --cask ngrok
-
-#configure ngrok and start it
-ngrok authtoken $3
-ngrok tcp 5900 &
+#Start free TCP tunnel with Pinggy (No card or signup needed)
+ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:5900 a.pinggy.io > pinggy.log 2>&1 &
+sleep 6
+cat pinggy.log

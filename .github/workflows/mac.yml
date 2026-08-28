@@ -8,11 +8,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure macOS Desktop & VNC
+      - name: Configure macOS Virtual Display & Remote Management
         run: |
           sudo mdutil -i off -a
           
-          # Create user
+          # Set runner user password
+          sudo dscl . -passwd /Users/runner "${{ secrets.VNC_USER_PASSWORD }}"
+          
+          # Create secondary user
           sudo dscl . -create /Users/vncuser
           sudo dscl . -create /Users/vncuser UserShell /bin/bash
           sudo dscl . -create /Users/vncuser RealName "VNC User"
@@ -20,26 +23,29 @@ jobs:
           sudo dscl . -create /Users/vncuser PrimaryGroupID 80
           sudo dscl . -create /Users/vncuser NFSHomeDirectory /Users/vncuser
           sudo dscl . -passwd /Users/vncuser "${{ secrets.VNC_USER_PASSWORD }}"
-          sudo dscl . -passwd /Users/vncuser "${{ secrets.VNC_USER_PASSWORD }}"
           sudo createhomedir -c -u vncuser > /dev/null
 
-          # Configure Apple Remote Desktop / VNC
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -allowAccessFor -allUsers -privs -all
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes
-          echo "${{ secrets.VNC_PASSWORD }}" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
+          # Set up Apple Remote Desktop / Screen Sharing
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate -configure -access -on -users runner,vncuser -privs -all -clientopts -setvnclegacy -vnclegacy yes
 
+          # Configure VNC Password
+          echo "${{ secrets.VNC_PASSWORD }}" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
+
+          # Wake up WindowServer & graphical display session
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
+          sudo caffeinate -u -t 5 &
+          
       - name: Start Cloudflare Tunnel
         run: |
           brew install cloudflare/cloudflare/cloudflared
           cloudflared tunnel --url tcp://localhost:5900 > cloudflared.log 2>&1 &
-          sleep 10
+          sleep 12
           cat cloudflared.log
 
       - name: Keep Alive
         run: |
           echo "=========================================="
-          echo "Cloudflare Tunnel is running"
+          echo "VNC session is ready with active display"
           echo "=========================================="
           sleep 21600

@@ -26,6 +26,5 @@ sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resourc
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
 
 #Start free TCP tunnel with Pinggy (No card or signup needed)
-ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:5900 a.pinggy.io > pinggy.log 2>&1 &
-sleep 6
+ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:5900 tcp@a.pinggy.io > pinggy.log 2>&1 &sleep 6
 cat pinggy.log

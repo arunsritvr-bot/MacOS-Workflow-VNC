@@ -26,6 +26,6 @@ sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resourc
 sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate
 
 #Start free TCP tunnel with Serveo
-ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 0:localhost:5900 serveo.net > serveo.log 2>&1 &
+ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 15900:localhost:5900 serveo.net > serveo.log 2>&1 &
 sleep 5
 cat serveo.log

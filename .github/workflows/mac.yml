@@ -12,19 +12,19 @@ jobs:
         run: |
           sudo mdutil -i off -a
           
-          # Set runner password without requiring old password
-          echo "${{ secrets.VNC_USER_PASSWORD }}" | sudo passwd -u runner
+          # Create user with sysadminctl
+          sudo sysadminctl -addUser vncuser -fullName "VNC User" -password "${{ secrets.VNC_USER_PASSWORD }}" -admin
           
-          # Enable Screen Sharing / Remote Management
+          # Enable Apple Remote Desktop / Screen Sharing for vncuser
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate -configure -access -on -users runner -privs -all -clientopts -setvnclegacy -vnclegacy yes
+            -activate -configure -access -on -users vncuser -privs -all -restart -agent -menu
 
-          # Configure legacy VNC password
-          echo "${{ secrets.VNC_PASSWORD }}" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA"}; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt
+          # Set legacy VNC password
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
 
-          # Restart remote agent and wake up session
+          # Restart remote agent
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent -console
-          sudo caffeinate -u -t 5 &
 
       - name: Start Cloudflare Tunnel
         run: |

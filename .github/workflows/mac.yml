@@ -25,12 +25,10 @@ jobs:
 
           # Start UI session awake
           sudo caffeinate -dimsu -w $$ &
-
-           - name: Connect Mac to Tailscale
+      - name: Connect Mac to Tailscale
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
-
       - name: Keep Alive
         run: |
           echo "=========================================="

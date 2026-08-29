@@ -29,6 +29,14 @@ jobs:
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
+
+      - name: Show Tailscale Address
+        run: |
+          echo "=========================================="
+          echo "Tailscale IPv4 address:"
+          tailscale ip -4
+          echo "=========================================="
+          tailscale status
       - name: Keep Alive
         run: |
           echo "=========================================="

@@ -18,10 +18,12 @@ jobs:
           # Enable Apple Remote Desktop / VNC
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -users runner -privs -all -restart -agent -menu
-
-          # Set legacy VNC password
+          # Configure legacy VNC authentication
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
+            -configure -clientopts -setvnclegacy -vnclegacy yes
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -clientopts -setvncpw -vncpw "${{ secrets.VNC_PASSWORD }}"
 
           # Start UI session awake
           sudo caffeinate -dimsu -w $$ &

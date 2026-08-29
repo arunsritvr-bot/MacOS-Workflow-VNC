@@ -37,9 +37,18 @@ jobs:
           tailscale ip -4
           echo "=========================================="
           tailscale status
-      - name: Keep Alive
-        run: |
+           - name: Keep Alive
+               run: |
           echo "=========================================="
           echo "macOS GUI desktop is initialized and running"
           echo "=========================================="
-          sleep 21600
+
+          while true; do
+            echo "----- $(date) -----"
+            echo "Tailscale status:"
+            tailscale status 
+            echo "VNC port:"
+            nc -zv 127.0.0.1 5900
+            echo "Keeping runner alive..."
+            sleep 60
+          done

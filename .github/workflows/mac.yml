@@ -33,12 +33,13 @@ jobs:
       - name: Show Tailscale Address
         run: |
           echo "=========================================="
-          echo "Tailscale IPv4 address:" 
+          echo "Tailscale IPv4 address:"
           tailscale ip -4
           echo "=========================================="
           tailscale status
-            - name: Keep Alive
-              run: |
+
+      - name: Keep Alive
+        run: |
           echo "=========================================="
           echo "macOS GUI desktop is initialized and running"
           echo "=========================================="

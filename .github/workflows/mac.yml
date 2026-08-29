@@ -26,12 +26,13 @@ jobs:
           # Start UI session awake
           sudo caffeinate -dimsu -w $$ &
 
-      - name: Start Cloudflare Tunnel
+           - name: Start ngrok TCP Tunnel
         run: |
-          brew install cloudflare/cloudflare/cloudflared
-          cloudflared tunnel --url tcp://localhost:5900 > cloudflared.log 2>&1 &
-          sleep 12
-          cat cloudflared.log
+          brew install ngrok/ngrok/ngrok
+          ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+          ngrok tcp 5900 --log=stdout > ngrok.log 2>&1 &
+          sleep 10
+          cat ngrok.log
 
       - name: Keep Alive
         run: |

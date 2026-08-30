@@ -7,16 +7,22 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure macOS Desktop & Screen Sharing
-       
+      - name: Configure macOS VNC
+        env:
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
         run: |
+          set -e
+
+          echo "=========================================="
+          echo "Configuring macOS Remote Management / VNC"
+          echo "=========================================="
+
+          ARD="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
+
           sudo mdutil -i off -a
 
-          echo "Configuring Remote Management..."
-
-          # Explicitly allow runner for Remote Management
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          echo "Activating Remote Management..."
+          sudo "$ARD" \
             -activate \
             -configure \
             -access -on \
@@ -26,25 +32,44 @@ jobs:
             -agent \
             -menu
 
-          # Enable legacy VNC
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          echo "Enabling legacy VNC authentication..."
+          sudo "$ARD" \
             -configure \
             -clientopts \
             -setvnclegacy \
             -vnclegacy yes
 
-          # Set VNC password
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          echo "Setting VNC password..."
+          sudo "$ARD" \
             -configure \
             -clientopts \
             -setvncpw \
-            -vncpw "${{ secrets.VNC_PASSWORD }}"
+            -vncpw "$VNC_PASSWORD"
 
-          # Restart Remote Management
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -restart \
-            -agent \
-            -console
+          echo "Restarting Remote Management..."
+          sudo "$ARD" -restart -agent
+
+          echo "Starting caffeinate..."
+          sudo caffeinate -dimsu &
+
+          echo "Waiting for VNC service..."
+          sleep 5
+
+          echo "=========================================="
+          echo "Checking port 5900"
+          echo "=========================================="
+
+          nc -zv 127.0.0.1 5900
+
+          echo "=========================================="
+          echo "Remote Management status"
+          echo "=========================================="
+
+          sudo "$ARD" -configure -getstatus
+
+          echo "=========================================="
+          echo "VNC configuration completed"
+          echo "=========================================="
 
           # Keep GUI session awake
           sudo caffeinate -dimsu &

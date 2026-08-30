@@ -73,6 +73,33 @@ jobs:
 
           # Keep GUI session awake
           sudo caffeinate -dimsu &
+                - name: Diagnose VNC
+    run: |
+          echo "=========================================="
+          echo "VNC PROCESS"
+          echo "=========================================="
+          ps aux | grep -i '[A]RDAgent' || true
+
+          echo "=========================================="
+          echo "PORT 5900"
+          echo "=========================================="
+          nc -zv 127.0.0.1 5900
+
+          echo "=========================================="
+          echo "LISTENING SOCKET"
+          echo "=========================================="
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+
+          echo "=========================================="
+          echo "REMOTE MANAGEMENT CONFIG"
+          echo "=========================================="
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure \
+            -getvnclegacy
+
+          echo "=========================================="
+          echo "DONE"
+          echo "=========================================="
       - name: Connect Mac to Tailscale
         uses: tailscale/github-action@v4
         with:

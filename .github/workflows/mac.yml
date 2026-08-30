@@ -65,8 +65,6 @@ jobs:
           echo "Remote Management status"
           echo "=========================================="
 
-          sudo "$ARD" -configure -getstatus
-
           echo "=========================================="
           echo "VNC configuration completed"
           echo "=========================================="

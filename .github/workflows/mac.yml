@@ -28,7 +28,7 @@ jobs:
             -access -on \
             -users runner \
             -privs -all \
-            -restart \
+            -restart \ 
             -agent \
             -menu
 

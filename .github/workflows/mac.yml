@@ -1,12 +1,19 @@
 name: mac
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-15-intel
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # Configure macOS Remote Management / VNC
+      # ============================================================
       - name: Configure macOS VNC
         env:
           VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
@@ -19,20 +26,23 @@ jobs:
 
           ARD="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
 
+          echo "Disabling Spotlight indexing..."
           sudo mdutil -i off -a
 
           echo "Activating Remote Management..."
+
           sudo "$ARD" \
             -activate \
             -configure \
             -access -on \
             -users runner \
             -privs -all \
-            -restart \ 
+            -restart \
             -agent \
             -menu
 
           echo "Enabling legacy VNC authentication..."
+
           sudo "$ARD" \
             -configure \
             -clientopts \
@@ -40,6 +50,7 @@ jobs:
             -vnclegacy yes
 
           echo "Setting VNC password..."
+
           sudo "$ARD" \
             -configure \
             -clientopts \
@@ -47,70 +58,98 @@ jobs:
             -vncpw "$VNC_PASSWORD"
 
           echo "Restarting Remote Management..."
+
           sudo "$ARD" -restart -agent
 
           echo "Starting caffeinate..."
+
           sudo caffeinate -dimsu &
 
           echo "Waiting for VNC service..."
           sleep 5
 
           echo "=========================================="
-          echo "Checking port 5900"
+          echo "Checking local VNC port 5900"
           echo "=========================================="
 
           nc -zv 127.0.0.1 5900
 
           echo "=========================================="
-          echo "Remote Management status"
+          echo "VNC process"
           echo "=========================================="
+
+          ps aux | grep -i '[A]RDAgent' || true
+
+          echo "=========================================="
+          echo "Listening socket"
+          echo "=========================================="
+
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+
+          echo "=========================================="
+          echo "VNC legacy configuration"
+          echo "=========================================="
+
+          sudo "$ARD" \
+            -configure \
+            -getvnclegacy || true
 
           echo "=========================================="
           echo "VNC configuration completed"
           echo "=========================================="
 
-          # Keep GUI session awake
-          sudo caffeinate -dimsu &
-                - name: Diagnose VNC
-    run: |
-          echo "=========================================="
-          echo "VNC PROCESS"
-          echo "=========================================="
-          ps aux | grep -i '[A]RDAgent' || true
-
-          echo "=========================================="
-          echo "PORT 5900"
-          echo "=========================================="
-          nc -zv 127.0.0.1 5900
-
-          echo "=========================================="
-          echo "LISTENING SOCKET"
-          echo "=========================================="
-          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
-
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT CONFIG"
-          echo "=========================================="
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure \
-            -getvnclegacy
-
-          echo "=========================================="
-          echo "DONE"
-          echo "=========================================="
+      # ============================================================
+      # Connect the GitHub Mac runner to Tailscale
+      # ============================================================
       - name: Connect Mac to Tailscale
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
+      # ============================================================
+      # Display Tailscale IP
+      # ============================================================
       - name: Show Tailscale Address
         run: |
           echo "=========================================="
           echo "Tailscale IPv4 address:"
-          tailscale ip -4
           echo "=========================================="
+
+          tailscale ip -4
+
+          echo "=========================================="
+          echo "Tailscale status:"
+          echo "=========================================="
+
           tailscale status
 
+      # ============================================================
+      # Test VNC through Tailscale
+      # ============================================================
+      - name: Test VNC Connection
+        run: |
+          set -e
+
+          MAC_IP="$(tailscale ip -4 | head -n 1)"
+
+          echo "=========================================="
+          echo "Mac Tailscale IP"
+          echo "=========================================="
+          echo "$MAC_IP"
+
+          echo "=========================================="
+          echo "Testing VNC port through Tailscale"
+          echo "=========================================="
+
+          nc -zv "$MAC_IP" 5900
+
+          echo "=========================================="
+          echo "VNC TCP connection is working"
+          echo "=========================================="
+
+      # ============================================================
+      # Keep the GitHub Mac runner alive
+      # ============================================================
       - name: Keep Alive
         run: |
           echo "=========================================="
@@ -118,11 +157,20 @@ jobs:
           echo "=========================================="
 
           while true; do
+
+            echo ""
             echo "----- $(date) -----"
+
             echo "Tailscale status:"
             tailscale status
+
+            echo ""
             echo "VNC port:"
             nc -zv 127.0.0.1 5900
+
+            echo ""
             echo "Keeping runner alive..."
+
             sleep 60
+
           done

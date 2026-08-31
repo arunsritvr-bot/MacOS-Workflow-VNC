@@ -8,6 +8,9 @@ jobs:
     runs-on: macos-15-intel
 
     steps:
+      # ============================================================
+      # Checkout repository
+      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -29,6 +32,9 @@ jobs:
           echo "Disabling Spotlight indexing..."
           sudo mdutil -i off -a
 
+          # --------------------------------------------------------
+          # Activate Remote Management
+          # --------------------------------------------------------
           echo "Activating Remote Management..."
 
           sudo "$ARD" \
@@ -41,7 +47,14 @@ jobs:
             -agent \
             -menu
 
-          echo "Enabling legacy VNC authentication..."
+          echo "Remote Management activated."
+
+          # --------------------------------------------------------
+          # Enable legacy VNC authentication
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Enabling legacy VNC authentication"
+          echo "=========================================="
 
           sudo "$ARD" \
             -configure \
@@ -49,7 +62,14 @@ jobs:
             -setvnclegacy \
             -vnclegacy yes
 
-          echo "Setting VNC password..."
+          echo "Legacy VNC authentication enabled."
+
+          # --------------------------------------------------------
+          # Set VNC password
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Setting VNC password"
+          echo "=========================================="
 
           sudo "$ARD" \
             -configure \
@@ -57,49 +77,86 @@ jobs:
             -setvncpw \
             -vncpw "$VNC_PASSWORD"
 
-          echo "Restarting Remote Management..."
+          echo "VNC password configured."
+
+          # --------------------------------------------------------
+          # Restart Remote Management
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Restarting Remote Management"
+          echo "=========================================="
 
           sudo "$ARD" -restart -agent
 
+          echo "Remote Management restarted."
+
+          # --------------------------------------------------------
+          # Prevent the runner from sleeping
+          # --------------------------------------------------------
           echo "Starting caffeinate..."
 
           sudo caffeinate -dimsu &
 
+          # --------------------------------------------------------
+          # Wait for VNC
+          # --------------------------------------------------------
           echo "Waiting for VNC service..."
           sleep 5
 
+          # --------------------------------------------------------
+          # Check local VNC port
+          # --------------------------------------------------------
           echo "=========================================="
           echo "Checking local VNC port 5900"
           echo "=========================================="
 
           nc -zv 127.0.0.1 5900
 
+          echo "Local VNC port 5900 is OPEN."
+
+          # --------------------------------------------------------
+          # Check ARDAgent
+          # --------------------------------------------------------
           echo "=========================================="
           echo "VNC process"
           echo "=========================================="
 
           ps aux | grep -i '[A]RDAgent' || true
 
+          # --------------------------------------------------------
+          # Check listening socket
+          # --------------------------------------------------------
           echo "=========================================="
           echo "Listening socket"
           echo "=========================================="
 
           sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
 
+          # --------------------------------------------------------
+          # Safely verify VNC configuration file exists
+          # DO NOT print its contents because it contains
+          # authentication material.
+          # --------------------------------------------------------
           echo "=========================================="
-          echo "VNC legacy configuration"
+          echo "VNC legacy configuration file"
           echo "=========================================="
 
-          sudo "$ARD" \
-            -configure \
-            -getvnclegacy || true
+          if [ -f /Library/Preferences/com.apple.VNCSettings.txt ]; then
+            echo "VNCSettings file EXISTS."
+            sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt
+
+            echo "VNCSettings file size:"
+            sudo wc -c < /Library/Preferences/com.apple.VNCSettings.txt
+          else
+            echo "WARNING: VNCSettings file DOES NOT EXIST."
+          fi
 
           echo "=========================================="
           echo "VNC configuration completed"
           echo "=========================================="
 
       # ============================================================
-      # Connect the GitHub Mac runner to Tailscale
+      # Connect Mac runner to Tailscale
       # ============================================================
       - name: Connect Mac to Tailscale
         uses: tailscale/github-action@v4
@@ -112,13 +169,13 @@ jobs:
       - name: Show Tailscale Address
         run: |
           echo "=========================================="
-          echo "Tailscale IPv4 address:"
+          echo "Tailscale IPv4 address"
           echo "=========================================="
 
           tailscale ip -4
 
           echo "=========================================="
-          echo "Tailscale status:"
+          echo "Tailscale status"
           echo "=========================================="
 
           tailscale status
@@ -148,7 +205,7 @@ jobs:
           echo "=========================================="
 
       # ============================================================
-      # Keep the GitHub Mac runner alive
+      # Keep GitHub Mac runner alive
       # ============================================================
       - name: Keep Alive
         run: |

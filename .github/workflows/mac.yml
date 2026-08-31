@@ -91,7 +91,7 @@ jobs:
           echo "Remote Management restarted."
 
           # --------------------------------------------------------
-          # Prevent the runner from sleeping
+          # Prevent runner from sleeping
           # --------------------------------------------------------
           echo "Starting caffeinate..."
 
@@ -133,9 +133,7 @@ jobs:
           sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
 
           # --------------------------------------------------------
-          # Safely verify VNC configuration file exists
-          # DO NOT print its contents because it contains
-          # authentication material.
+          # Verify VNC configuration file
           # --------------------------------------------------------
           echo "=========================================="
           echo "VNC legacy configuration file"
@@ -146,7 +144,7 @@ jobs:
             sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt
 
             echo "VNCSettings file size:"
-            sudo wc -c < /Library/Preferences/com.apple.VNCSettings.txt
+            sudo stat -f "%z bytes" /Library/Preferences/com.apple.VNCSettings.txt
           else
             echo "WARNING: VNCSettings file DOES NOT EXIST."
           fi

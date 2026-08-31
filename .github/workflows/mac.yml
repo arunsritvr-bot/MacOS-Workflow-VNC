@@ -1,3 +1,4 @@
+```yaml
 name: mac
 
 on:
@@ -5,12 +6,13 @@ on:
   push:
     branches:
       - master
- 
+
 jobs:
   build:
     runs-on: macos-15-intel
 
     steps:
+
       # ============================================================
       # Checkout repository
       # ============================================================
@@ -155,6 +157,10 @@ jobs:
           echo "=========================================="
           echo "VNC configuration completed"
           echo "=========================================="
+
+      # ============================================================
+      # Diagnose macOS GUI Session
+      # ============================================================
       - name: Diagnose macOS GUI Session
         run: |
           echo "=========================================="
@@ -181,13 +187,21 @@ jobs:
           echo "Displays"
           echo "=========================================="
           system_profiler SPDisplaysDataType || true
-                - name: Diagnose Screen Sharing
-    run: |
+
+      # ============================================================
+      # Diagnose Screen Sharing / Remote Management
+      # ============================================================
+      - name: Diagnose Screen Sharing
+        run: |
           echo "=========================================="
-          echo "Screen Sharing / Remote Management status"
+          echo "SCREEN SHARING / REMOTE MANAGEMENT STATUS"
           echo "=========================================="
 
-          echo "Remote Management preferences:"
+          echo ""
+          echo "=========================================="
+          echo "Remote Management preferences"
+          echo "=========================================="
+
           sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>/dev/null || true
 
           echo ""
@@ -199,14 +213,14 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "ARDAgent"
+          echo "ARDAgent / VNC / Screen Sharing processes"
           echo "=========================================="
 
           ps aux | grep -E '[A]RDAgent|[V]NC|[s]creensharing' || true
 
           echo ""
           echo "=========================================="
-          echo "Remote Management processes"
+          echo "Remote Management launch services"
           echo "=========================================="
 
           sudo launchctl list | grep -Ei 'remote|screen|vnc|ard' || true
@@ -216,8 +230,27 @@ jobs:
           echo "Console session"
           echo "=========================================="
 
+          echo "Console user:"
           stat -f "%Su" /dev/console
+
+          echo ""
+          echo "Logged-in users:"
           who
+
+          echo ""
+          echo "=========================================="
+          echo "WindowServer"
+          echo "=========================================="
+
+          ps aux | grep -E '[W]indowServer' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Display information"
+          echo "=========================================="
+
+          system_profiler SPDisplaysDataType 2>/dev/null || true
+
       # ============================================================
       # Connect Mac runner to Tailscale
       # ============================================================
@@ -294,3 +327,4 @@ jobs:
             sleep 60
 
           done
+```

@@ -152,7 +152,32 @@ jobs:
           echo "=========================================="
           echo "VNC configuration completed"
           echo "=========================================="
+      - name: Diagnose macOS GUI Session
+        run: |
+          echo "=========================================="
+          echo "Current user"
+          echo "=========================================="
+          whoami
 
+          echo "=========================================="
+          echo "Logged-in users"
+          echo "=========================================="
+          who
+
+          echo "=========================================="
+          echo "Console user"
+          echo "=========================================="
+          stat -f "%Su" /dev/console
+
+          echo "=========================================="
+          echo "GUI processes"
+          echo "=========================================="
+          ps aux | grep -E '[W]indowServer|[l]oginwindow|[S]ystemUIServer' || true
+
+          echo "=========================================="
+          echo "Displays"
+          echo "=========================================="
+          system_profiler SPDisplaysDataType || true
       # ============================================================
       # Connect Mac runner to Tailscale
       # ============================================================

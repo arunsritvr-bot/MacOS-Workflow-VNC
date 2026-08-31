@@ -2,7 +2,7 @@ name: mac
 
 on:
   workflow_dispatch:
-
+ 
 jobs:
   build:
     runs-on: macos-15-intel

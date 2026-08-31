@@ -1,22 +1,330 @@
+```yaml
 name: mac
-on: 
+
+on:
   workflow_dispatch:
-defaults:
-  run:
-    shell: bash
+  push:
+    branches:
+      - master
 
 jobs:
   build:
-    runs-on: macos-11
+    runs-on: macos-15-intel
+
     steps:
-    - uses: actions/checkout@v2
-    - name: Setting the environment up.
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        VNC_USER_PASSWORD: ${{ secrets.VNC_USER_PASSWORD }}
-        VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
-      run: source configure.sh "$VNC_USER_PASSWORD" "$VNC_PASSWORD" "$NGROK_AUTH_TOKEN"
-    - name: ngrok is now listening to VNC connections on...
-      run: curl --silent http://127.0.0.1:4040/api/tunnels | jq '.tunnels[0].public_url'
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v2
+
+      # ============================================================
+      # Checkout repository
+      # ============================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # Configure macOS Remote Management / VNC
+      # ============================================================
+      - name: Configure macOS VNC
+        env:
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "Configuring macOS Remote Management / VNC"
+          echo "=========================================="
+
+          ARD="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
+
+          echo "Disabling Spotlight indexing..."
+          sudo mdutil -i off -a
+
+          # --------------------------------------------------------
+          # Activate Remote Management
+          # --------------------------------------------------------
+          echo "Activating Remote Management..."
+
+          sudo "$ARD" \
+            -activate \
+            -configure \
+            -access -on \
+            -users runner \
+            -privs -all \
+            -restart \
+            -agent \
+            -menu
+
+          echo "Remote Management activated."
+
+          # --------------------------------------------------------
+          # Enable legacy VNC authentication
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Enabling legacy VNC authentication"
+          echo "=========================================="
+
+          sudo "$ARD" \
+            -configure \
+            -clientopts \
+            -setvnclegacy \
+            -vnclegacy yes
+
+          echo "Legacy VNC authentication enabled."
+
+          # --------------------------------------------------------
+          # Set VNC password
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Setting VNC password"
+          echo "=========================================="
+
+          sudo "$ARD" \
+            -configure \
+            -clientopts \
+            -setvncpw \
+            -vncpw "$VNC_PASSWORD"
+
+          echo "VNC password configured."
+
+          # --------------------------------------------------------
+          # Restart Remote Management
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Restarting Remote Management"
+          echo "=========================================="
+
+          sudo "$ARD" -restart -agent
+
+          echo "Remote Management restarted."
+
+          # --------------------------------------------------------
+          # Prevent runner from sleeping
+          # --------------------------------------------------------
+          echo "Starting caffeinate..."
+
+          sudo caffeinate -dimsu &
+
+          # --------------------------------------------------------
+          # Wait for VNC
+          # --------------------------------------------------------
+          echo "Waiting for VNC service..."
+          sleep 5
+
+          # --------------------------------------------------------
+          # Check local VNC port
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Checking local VNC port 5900"
+          echo "=========================================="
+
+          nc -zv 127.0.0.1 5900
+
+          echo "Local VNC port 5900 is OPEN."
+
+          # --------------------------------------------------------
+          # Check ARDAgent
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "VNC process"
+          echo "=========================================="
+
+          ps aux | grep -i '[A]RDAgent' || true
+
+          # --------------------------------------------------------
+          # Check listening socket
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "Listening socket"
+          echo "=========================================="
+
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+
+          # --------------------------------------------------------
+          # Verify VNC configuration file
+          # --------------------------------------------------------
+          echo "=========================================="
+          echo "VNC legacy configuration file"
+          echo "=========================================="
+
+          if [ -f /Library/Preferences/com.apple.VNCSettings.txt ]; then
+            echo "VNCSettings file EXISTS."
+            sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt
+
+            echo "VNCSettings file size:"
+            sudo stat -f "%z bytes" /Library/Preferences/com.apple.VNCSettings.txt
+          else
+            echo "WARNING: VNCSettings file DOES NOT EXIST."
+          fi
+
+          echo "=========================================="
+          echo "VNC configuration completed"
+          echo "=========================================="
+
+      # ============================================================
+      # Diagnose macOS GUI Session
+      # ============================================================
+      - name: Diagnose macOS GUI Session
+        run: |
+          echo "=========================================="
+          echo "Current user"
+          echo "=========================================="
+          whoami
+
+          echo "=========================================="
+          echo "Logged-in users"
+          echo "=========================================="
+          who
+
+          echo "=========================================="
+          echo "Console user"
+          echo "=========================================="
+          stat -f "%Su" /dev/console
+
+          echo "=========================================="
+          echo "GUI processes"
+          echo "=========================================="
+          ps aux | grep -E '[W]indowServer|[l]oginwindow|[S]ystemUIServer' || true
+
+          echo "=========================================="
+          echo "Displays"
+          echo "=========================================="
+          system_profiler SPDisplaysDataType || true
+
+      # ============================================================
+      # Diagnose Screen Sharing / Remote Management
+      # ============================================================
+      - name: Diagnose Screen Sharing
+        run: |
+          echo "=========================================="
+          echo "SCREEN SHARING / REMOTE MANAGEMENT STATUS"
+          echo "=========================================="
+
+          echo ""
+          echo "=========================================="
+          echo "Remote Management preferences"
+          echo "=========================================="
+
+          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>/dev/null || true
+
+          echo ""
+          echo "=========================================="
+          echo "Screen Sharing launch daemon"
+          echo "=========================================="
+
+          sudo launchctl print system/com.apple.screensharing 2>/dev/null || true
+
+          echo ""
+          echo "=========================================="
+          echo "ARDAgent / VNC / Screen Sharing processes"
+          echo "=========================================="
+
+          ps aux | grep -E '[A]RDAgent|[V]NC|[s]creensharing' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Remote Management launch services"
+          echo "=========================================="
+
+          sudo launchctl list | grep -Ei 'remote|screen|vnc|ard' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Console session"
+          echo "=========================================="
+
+          echo "Console user:"
+          stat -f "%Su" /dev/console
+
+          echo ""
+          echo "Logged-in users:"
+          who
+
+          echo ""
+          echo "=========================================="
+          echo "WindowServer"
+          echo "=========================================="
+
+          ps aux | grep -E '[W]indowServer' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Display information"
+          echo "=========================================="
+
+          system_profiler SPDisplaysDataType 2>/dev/null || true
+
+      # ============================================================
+      # Connect Mac runner to Tailscale
+      # ============================================================
+      - name: Connect Mac to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
+      # ============================================================
+      # Display Tailscale IP
+      # ============================================================
+      - name: Show Tailscale Address
+        run: |
+          echo "=========================================="
+          echo "Tailscale IPv4 address"
+          echo "=========================================="
+
+          tailscale ip -4
+
+          echo "=========================================="
+          echo "Tailscale status"
+          echo "=========================================="
+
+          tailscale status
+
+      # ============================================================
+      # Test VNC through Tailscale
+      # ============================================================
+      - name: Test VNC Connection
+        run: |
+          set -e
+
+          MAC_IP="$(tailscale ip -4 | head -n 1)"
+
+          echo "=========================================="
+          echo "Mac Tailscale IP"
+          echo "=========================================="
+          echo "$MAC_IP"
+
+          echo "=========================================="
+          echo "Testing VNC port through Tailscale"
+          echo "=========================================="
+
+          nc -zv "$MAC_IP" 5900
+
+          echo "=========================================="
+          echo "VNC TCP connection is working"
+          echo "=========================================="
+
+      # ============================================================
+      # Keep GitHub Mac runner alive
+      # ============================================================
+      - name: Keep Alive
+        run: |
+          echo "=========================================="
+          echo "macOS GUI desktop is initialized and running"
+          echo "=========================================="
+
+          while true; do
+
+            echo ""
+            echo "----- $(date) -----"
+
+            echo "Tailscale status:"
+            tailscale status
+
+            echo ""
+            echo "VNC port:"
+            nc -zv 127.0.0.1 5900
+
+            echo ""
+            echo "Keeping runner alive..."
+
+            sleep 60
+
+          done
+```

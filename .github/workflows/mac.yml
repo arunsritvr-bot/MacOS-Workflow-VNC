@@ -178,6 +178,43 @@ jobs:
           echo "Displays"
           echo "=========================================="
           system_profiler SPDisplaysDataType || true
+                - name: Diagnose Screen Sharing
+    run: |
+          echo "=========================================="
+          echo "Screen Sharing / Remote Management status"
+          echo "=========================================="
+
+          echo "Remote Management preferences:"
+          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>/dev/null || true
+
+          echo ""
+          echo "=========================================="
+          echo "Screen Sharing launch daemon"
+          echo "=========================================="
+
+          sudo launchctl print system/com.apple.screensharing 2>/dev/null || true
+
+          echo ""
+          echo "=========================================="
+          echo "ARDAgent"
+          echo "=========================================="
+
+          ps aux | grep -E '[A]RDAgent|[V]NC|[s]creensharing' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Remote Management processes"
+          echo "=========================================="
+
+          sudo launchctl list | grep -Ei 'remote|screen|vnc|ard' || true
+
+          echo ""
+          echo "=========================================="
+          echo "Console session"
+          echo "=========================================="
+
+          stat -f "%Su" /dev/console
+          who
       # ============================================================
       # Connect Mac runner to Tailscale
       # ============================================================

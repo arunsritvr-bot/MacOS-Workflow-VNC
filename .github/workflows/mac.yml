@@ -249,7 +249,7 @@ jobs:
           echo "=========================================="
 
           system_profiler SPDisplaysDataType 2>/dev/null || true
-      - name: Diagnose Screen Capture Authorization
+          - name: Diagnose Screen Capture Authorization
         run: |
           echo "=========================================="
           echo "SCREEN CAPTURE AUTHORIZATION DIAGNOSTICS"
@@ -279,27 +279,61 @@ jobs:
           pgrep -fl VNCPrivilegeProxy || true
 
           echo ""
-          echo "Remote Management status:"
-          /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          echo "=========================================="
+          echo "REMOTE MANAGEMENT STATUS (ROOT)"
+          echo "=========================================="
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -status || true
 
           echo ""
-          echo "Remote Management user privileges:"
-          /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+          echo "=========================================="
+          echo "REMOTE MANAGEMENT PRIVILEGES (ROOT)"
+          echo "=========================================="
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -getprivs || true
 
           echo ""
-          echo "Screen Sharing preferences:"
-          defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
+          echo "=========================================="
+          echo "REMOTE MANAGEMENT USER ACCESS"
+          echo "=========================================="
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -getaccess || true
 
           echo ""
-          echo "VNC preferences:"
-          defaults read /Library/Preferences/com.apple.VNCSettings 2>&1 || true
+          echo "=========================================="
+          echo "REMOTE MANAGEMENT PREFERENCES"
+          echo "=========================================="
+
+          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
 
           echo ""
-          echo "TCC database locations:"
-          ls -l /Library/Application\ Support/com.apple.TCC/TCC.db 2>&1 || true
+          echo "=========================================="
+          echo "VNC LEGACY FILE"
+          echo "=========================================="
+
+          sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt 2>&1 || true
+
+          echo ""
+          echo "=========================================="
+          echo "TCC DATABASES"
+          echo "=========================================="
+
+          sudo ls -l "/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
           ls -l "$HOME/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
+
+          echo ""
+          echo "=========================================="
+          echo "RECENT SCREENSHARING / ARDAgent LOGS"
+          echo "=========================================="
+
+          log show \
+            --last 10m \
+            --style compact \
+            --predicate '(process == "screensharingd") OR (process == "ARDAgent") OR (process == "VNCPrivilegeProxy")' \
+            2>&1 | tail -200 || true
 
           echo ""
           echo "=========================================="

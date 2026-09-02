@@ -250,7 +250,7 @@ jobs:
 
           system_profiler SPDisplaysDataType 2>/dev/null || true
           - name: Diagnose Screen Capture Authorization
-        run: |
+    run: |
           echo "=========================================="
           echo "SCREEN CAPTURE AUTHORIZATION DIAGNOSTICS"
           echo "=========================================="

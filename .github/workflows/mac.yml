@@ -249,7 +249,62 @@ jobs:
           echo "=========================================="
 
           system_profiler SPDisplaysDataType 2>/dev/null || true
+      - name: Diagnose Screen Capture Authorization
+        run: |
+          echo "=========================================="
+          echo "SCREEN CAPTURE AUTHORIZATION DIAGNOSTICS"
+          echo "=========================================="
 
+          echo "Current console user:"
+          stat -f "%Su" /dev/console || true
+
+          echo ""
+          echo "Current GUI session:"
+          who || true
+
+          echo ""
+          echo "WindowServer:"
+          pgrep -fl WindowServer || true
+
+          echo ""
+          echo "ARDAgent:"
+          pgrep -fl ARDAgent || true
+
+          echo ""
+          echo "screensharingd:"
+          pgrep -fl screensharingd || true
+
+          echo ""
+          echo "VNCPrivilegeProxy:"
+          pgrep -fl VNCPrivilegeProxy || true
+
+          echo ""
+          echo "Remote Management status:"
+          /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -status || true
+
+          echo ""
+          echo "Remote Management user privileges:"
+          /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -getprivs || true
+
+          echo ""
+          echo "Screen Sharing preferences:"
+          defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
+
+          echo ""
+          echo "VNC preferences:"
+          defaults read /Library/Preferences/com.apple.VNCSettings 2>&1 || true
+
+          echo ""
+          echo "TCC database locations:"
+          ls -l /Library/Application\ Support/com.apple.TCC/TCC.db 2>&1 || true
+          ls -l "$HOME/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
+
+          echo ""
+          echo "=========================================="
+          echo "END SCREEN CAPTURE DIAGNOSTICS"
+          echo "=========================================="
       # ============================================================
       # Connect Mac runner to Tailscale
       # ============================================================

@@ -11,19 +11,13 @@ jobs:
     runs-on: macos-15-intel
 
     steps:
-
-      # ============================================================
-      # Checkout repository
-      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
 
       # ============================================================
-      # Configure macOS Remote Management / VNC
+      # CONFIGURE macOS REMOTE MANAGEMENT / VNC
       # ============================================================
-      - name: Configure macOS VNC
-        env:
-          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+      - name: Configure macOS Desktop & Screen Sharing
         run: |
           set -e
 
@@ -31,230 +25,201 @@ jobs:
           echo "Configuring macOS Remote Management / VNC"
           echo "=========================================="
 
-          ARD="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
-
+          echo ""
           echo "Disabling Spotlight indexing..."
-          sudo mdutil -i off -a
+          sudo mdutil -a -i off || true
 
-          # --------------------------------------------------------
-          # Activate Remote Management
-          # --------------------------------------------------------
-          echo "Activating Remote Management..."
+          echo ""
+          echo "Current console user:"
+          stat -f "%Su" /dev/console || true
 
-          sudo "$ARD" \
+          CONSOLE_USER="$(stat -f "%Su" /dev/console)"
+          echo "Console user = $CONSOLE_USER"
+
+          echo ""
+          echo "Checking GUI processes..."
+          pgrep -fl WindowServer || true
+          pgrep -fl loginwindow || true
+          pgrep -fl SystemUIServer || true
+
+          echo ""
+          echo "=========================================="
+          echo "ENABLING REMOTE MANAGEMENT"
+          echo "=========================================="
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate \
-            -configure \
+            -configure -access -on \
+            -configure -allowAccessFor -allUsers \
+            -configure -allowOthers -on \
+            -configure -restart -agent -privs -all
+
+          echo ""
+          echo "=========================================="
+          echo "SETTING USER REMOTE CONTROL PRIVILEGES"
+          echo "=========================================="
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -users "$CONSOLE_USER" \
             -access -on \
-            -users runner \
-            -privs -all \
-            -restart \
-            -agent \
-            -menu
+            -privs -all || true
 
-          echo "Remote Management activated."
-
-          # --------------------------------------------------------
-          # Enable legacy VNC authentication
-          # --------------------------------------------------------
+          echo ""
           echo "=========================================="
-          echo "Enabling legacy VNC authentication"
+          echo "SETTING VNC ACCESS"
           echo "=========================================="
 
-          sudo "$ARD" \
-            -configure \
-            -clientopts \
-            -setvnclegacy \
-            -vnclegacy yes
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -clientopts \
+            -setvnclegacy -vnclegacy yes \
+            -setvncpw -vncpw "${VNC_PASSWORD}" || true
 
-          echo "Legacy VNC authentication enabled."
+          echo ""
+          echo "Restarting Remote Management..."
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -restart -agent -privs -all || true
 
-          # --------------------------------------------------------
-          # Set VNC password
-          # --------------------------------------------------------
-          echo "=========================================="
-          echo "Setting VNC password"
-          echo "=========================================="
+          echo ""
+          echo "Restarting System UI..."
+          killall SystemUIServer 2>/dev/null || true
 
-          sudo "$ARD" \
-            -configure \
-            -clientopts \
-            -setvncpw \
-            -vncpw "$VNC_PASSWORD"
-
-          echo "VNC password configured."
-
-          # --------------------------------------------------------
-          # Restart Remote Management
-          # --------------------------------------------------------
-          echo "=========================================="
-          echo "Restarting Remote Management"
-          echo "=========================================="
-
-          sudo "$ARD" -restart -agent
-
-          echo "Remote Management restarted."
-
-          # --------------------------------------------------------
-          # Prevent runner from sleeping
-          # --------------------------------------------------------
-          echo "Starting caffeinate..."
-
-          sudo caffeinate -dimsu &
-
-          # --------------------------------------------------------
-          # Wait for VNC
-          # --------------------------------------------------------
-          echo "Waiting for VNC service..."
           sleep 5
 
-          # --------------------------------------------------------
-          # Check local VNC port
-          # --------------------------------------------------------
+          echo ""
           echo "=========================================="
-          echo "Checking local VNC port 5900"
+          echo "REMOTE MANAGEMENT PREFERENCES"
           echo "=========================================="
 
-          nc -zv 127.0.0.1 5900
+          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
 
-          echo "Local VNC port 5900 is OPEN."
-
-          # --------------------------------------------------------
-          # Check ARDAgent
-          # --------------------------------------------------------
+          echo ""
           echo "=========================================="
-          echo "VNC process"
+          echo "VNC SETTINGS"
           echo "=========================================="
 
-          ps aux | grep -i '[A]RDAgent' || true
+          sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt 2>&1 || true
 
-          # --------------------------------------------------------
-          # Check listening socket
-          # --------------------------------------------------------
+          echo ""
           echo "=========================================="
-          echo "Listening socket"
+          echo "PROCESS CHECK"
+          echo "=========================================="
+
+          pgrep -fl ARDAgent || true
+          pgrep -fl screensharingd || true
+          pgrep -fl VNCPrivilegeProxy || true
+
+          echo ""
+          echo "=========================================="
+          echo "PORT 5900 CHECK"
           echo "=========================================="
 
           sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
 
-          # --------------------------------------------------------
-          # Verify VNC configuration file
-          # --------------------------------------------------------
-          echo "=========================================="
-          echo "VNC legacy configuration file"
-          echo "=========================================="
+          echo ""
+          echo "Testing local VNC port..."
+          nc -vz 127.0.0.1 5900
 
-          if [ -f /Library/Preferences/com.apple.VNCSettings.txt ]; then
-            echo "VNCSettings file EXISTS."
-            sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt
+          echo ""
+          echo "VNC configuration complete."
 
-            echo "VNCSettings file size:"
-            sudo stat -f "%z bytes" /Library/Preferences/com.apple.VNCSettings.txt
-          else
-            echo "WARNING: VNCSettings file DOES NOT EXIST."
-          fi
+        env:
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
 
-          echo "=========================================="
-          echo "VNC configuration completed"
-          echo "=========================================="
 
       # ============================================================
-      # Diagnose macOS GUI Session
+      # GUI SESSION DIAGNOSTICS
       # ============================================================
       - name: Diagnose macOS GUI Session
         run: |
           echo "=========================================="
-          echo "Current user"
+          echo "macOS GUI SESSION DIAGNOSTICS"
           echo "=========================================="
-          whoami
 
-          echo "=========================================="
-          echo "Logged-in users"
-          echo "=========================================="
-          who
+          echo ""
+          echo "Console user:"
+          stat -f "%Su" /dev/console || true
 
-          echo "=========================================="
-          echo "Console user"
-          echo "=========================================="
-          stat -f "%Su" /dev/console
+          echo ""
+          echo "Logged-in users:"
+          who || true
 
-          echo "=========================================="
-          echo "GUI processes"
-          echo "=========================================="
-          ps aux | grep -E '[W]indowServer|[l]oginwindow|[S]ystemUIServer' || true
+          echo ""
+          echo "WindowServer:"
+          pgrep -fl WindowServer || true
 
+          echo ""
+          echo "SystemUIServer:"
+          pgrep -fl SystemUIServer || true
+
+          echo ""
+          echo "loginwindow:"
+          pgrep -fl loginwindow || true
+
+          echo ""
+          echo "ARDAgent:"
+          pgrep -fl ARDAgent || true
+
+          echo ""
+          echo "screensharingd:"
+          pgrep -fl screensharingd || true
+
+          echo ""
+          echo "Display information:"
+          system_profiler SPDisplaysDataType 2>&1 || true
+
+          echo ""
           echo "=========================================="
-          echo "Displays"
+          echo "END GUI SESSION DIAGNOSTICS"
           echo "=========================================="
-          system_profiler SPDisplaysDataType || true
+
 
       # ============================================================
-      # Diagnose Screen Sharing / Remote Management
+      # SCREEN SHARING DIAGNOSTICS
       # ============================================================
       - name: Diagnose Screen Sharing
         run: |
           echo "=========================================="
-          echo "SCREEN SHARING / REMOTE MANAGEMENT STATUS"
+          echo "SCREEN SHARING DIAGNOSTICS"
           echo "=========================================="
 
           echo ""
-          echo "=========================================="
-          echo "Remote Management preferences"
-          echo "=========================================="
-
-          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>/dev/null || true
+          echo "Remote Management preferences:"
+          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
 
           echo ""
-          echo "=========================================="
-          echo "Screen Sharing launch daemon"
-          echo "=========================================="
-
-          sudo launchctl print system/com.apple.screensharing 2>/dev/null || true
+          echo "Screen Sharing launchd service:"
+          sudo launchctl print system/com.apple.screensharing 2>&1 || true
 
           echo ""
-          echo "=========================================="
-          echo "ARDAgent / VNC / Screen Sharing processes"
-          echo "=========================================="
-
-          ps aux | grep -E '[A]RDAgent|[V]NC|[s]creensharing' || true
-
-          echo ""
-          echo "=========================================="
-          echo "Remote Management launch services"
-          echo "=========================================="
-
-          sudo launchctl list | grep -Ei 'remote|screen|vnc|ard' || true
+          echo "Running screen sharing processes:"
+          pgrep -fl screensharingd || true
+          pgrep -fl VNCPrivilegeProxy || true
+          pgrep -fl ARDAgent || true
 
           echo ""
-          echo "=========================================="
-          echo "Console session"
-          echo "=========================================="
-
           echo "Console user:"
-          stat -f "%Su" /dev/console
+          stat -f "%Su" /dev/console || true
 
           echo ""
-          echo "Logged-in users:"
-          who
-
-          echo ""
-          echo "=========================================="
-          echo "WindowServer"
-          echo "=========================================="
-
-          ps aux | grep -E '[W]indowServer' || true
+          echo "WindowServer:"
+          pgrep -fl WindowServer || true
 
           echo ""
           echo "=========================================="
-          echo "Display information"
+          echo "END SCREEN SHARING DIAGNOSTICS"
           echo "=========================================="
 
-          system_profiler SPDisplaysDataType 2>/dev/null || true
-          - name: Diagnose Screen Capture Authorization
-    run: |
+
+      # ============================================================
+      # SCREEN CAPTURE / REMOTE MANAGEMENT AUTHORIZATION
+      # ============================================================
+      - name: Diagnose Screen Capture Authorization
+        run: |
           echo "=========================================="
           echo "SCREEN CAPTURE AUTHORIZATION DIAGNOSTICS"
           echo "=========================================="
 
+          echo ""
           echo "Current console user:"
           stat -f "%Su" /dev/console || true
 
@@ -322,11 +287,12 @@ jobs:
           echo "=========================================="
 
           sudo ls -l "/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
+
           ls -l "$HOME/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
 
           echo ""
           echo "=========================================="
-          echo "RECENT SCREENSHARING / ARDAgent LOGS"
+          echo "RECENT SCREENSHARING / ARDAGENT LOGS"
           echo "=========================================="
 
           log show \
@@ -339,79 +305,142 @@ jobs:
           echo "=========================================="
           echo "END SCREEN CAPTURE DIAGNOSTICS"
           echo "=========================================="
+
+
       # ============================================================
-      # Connect Mac runner to Tailscale
+      # CONNECT MAC RUNNER TO TAILSCALE
       # ============================================================
       - name: Connect Mac to Tailscale
         uses: tailscale/github-action@v4
         with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
 
       # ============================================================
-      # Display Tailscale IP
+      # SHOW TAILSCALE ADDRESS
       # ============================================================
       - name: Show Tailscale Address
         run: |
           echo "=========================================="
-          echo "Tailscale IPv4 address"
+          echo "TAILSCALE INFORMATION"
           echo "=========================================="
 
-          tailscale ip -4
+          tailscale version
 
+          echo ""
+          echo "Tailscale status:"
+          tailscale status || true
+
+          echo ""
+          echo "Tailscale IPv4:"
+          tailscale ip -4 || true
+
+          echo ""
+          echo "Tailscale IPv6:"
+          tailscale ip -6 || true
+
+          echo ""
           echo "=========================================="
-          echo "Tailscale status"
+          echo "VNC CONNECTION"
           echo "=========================================="
 
-          tailscale status
+          MAC_IP="$(tailscale ip -4 | head -1)"
+
+          echo "Mac Tailscale IP:"
+          echo "$MAC_IP"
+
+          echo ""
+          echo "Connect from Windows using:"
+          echo "vncviewer64-1.14.1.exe -SecurityTypes VncAuth -AutoSelect=0 -FullColor=1 -PreferredEncoding=Raw ${MAC_IP}:5900"
+
+          echo ""
+          echo "VNC password = GitHub secret VNC_PASSWORD"
+
 
       # ============================================================
-      # Test VNC through Tailscale
+      # TEST VNC CONNECTION
       # ============================================================
       - name: Test VNC Connection
         run: |
           set -e
 
-          MAC_IP="$(tailscale ip -4 | head -n 1)"
-
           echo "=========================================="
-          echo "Mac Tailscale IP"
-          echo "=========================================="
-          echo "$MAC_IP"
-
-          echo "=========================================="
-          echo "Testing VNC port through Tailscale"
+          echo "TESTING VNC CONNECTION"
           echo "=========================================="
 
-          nc -zv "$MAC_IP" 5900
+          MAC_IP="$(tailscale ip -4 | head -1)"
 
+          echo ""
+          echo "Mac Tailscale IP: $MAC_IP"
+
+          echo ""
+          echo "Testing TCP port 5900..."
+          nc -vz "$MAC_IP" 5900
+
+          echo ""
+          echo "Port 5900 is reachable through Tailscale."
+
+          echo ""
+          echo "Listening socket:"
+          sudo lsof -nP -iTCP:5900 -sTCP:LISTEN || true
+
+          echo ""
           echo "=========================================="
-          echo "VNC TCP connection is working"
+          echo "VNC NETWORK TEST PASSED"
           echo "=========================================="
+
 
       # ============================================================
-      # Keep GitHub Mac runner alive
+      # KEEP RUNNER ALIVE
       # ============================================================
       - name: Keep Alive
         run: |
           echo "=========================================="
-          echo "macOS GUI desktop is initialized and running"
+          echo "MACOS VNC SESSION READY"
           echo "=========================================="
 
-          while true; do
+          MAC_IP="$(tailscale ip -4 | head -1)"
+
+          echo ""
+          echo "=========================================="
+          echo "REMOTE MAC INFORMATION"
+          echo "=========================================="
+          echo "Tailscale IP: $MAC_IP"
+          echo "VNC Port: 5900"
+          echo "Username: runner"
+
+          echo ""
+          echo "=========================================="
+          echo "WINDOWS TIGERVNC COMMAND"
+          echo "=========================================="
+          echo "vncviewer64-1.14.1.exe -SecurityTypes VncAuth -AutoSelect=0 -FullColor=1 -PreferredEncoding=Raw ${MAC_IP}:5900"
+
+          echo ""
+          echo "=========================================="
+          echo "KEEPING MAC RUNNER ALIVE"
+          echo "=========================================="
+
+          while true
+          do
+            echo ""
+            echo "------------------------------------------"
+            date
 
             echo ""
-            echo "----- $(date) -----"
-
-            echo "Tailscale status:"
-            tailscale status
+            echo "Tailscale IP:"
+            tailscale ip -4 || true
 
             echo ""
             echo "VNC port:"
-            nc -zv 127.0.0.1 5900
+            nc -z 127.0.0.1 5900 && echo "5900 OPEN" || echo "5900 CLOSED"
 
             echo ""
-            echo "Keeping runner alive..."
+            echo "GUI processes:"
+            pgrep -fl WindowServer || true
+            pgrep -fl ARDAgent || true
+            pgrep -fl screensharingd || true
 
             sleep 60
-
           done

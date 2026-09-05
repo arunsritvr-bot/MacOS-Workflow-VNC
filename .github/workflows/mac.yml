@@ -89,27 +89,16 @@ jobs:
           echo "Restarting System UI..."
           killall SystemUIServer 2>/dev/null || true
 
-          sleep 5
-
-          echo ""
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT PREFERENCES"
-          echo "=========================================="
-
-          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
-
-          echo ""
-          echo "=========================================="
-          echo "VNC SETTINGS"
-          echo "=========================================="
-
-          sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt 2>&1 || true
+          sleep 10
 
           echo ""
           echo "=========================================="
           echo "PROCESS CHECK"
           echo "=========================================="
 
+          pgrep -fl WindowServer || true
+          pgrep -fl loginwindow || true
+          pgrep -fl SystemUIServer || true
           pgrep -fl ARDAgent || true
           pgrep -fl screensharingd || true
           pgrep -fl VNCPrivilegeProxy || true
@@ -146,8 +135,17 @@ jobs:
           stat -f "%Su" /dev/console || true
 
           echo ""
+          echo "Console user UID:"
+          CONSOLE_USER="$(stat -f "%Su" /dev/console)"
+          id "$CONSOLE_USER" || true
+
+          echo ""
           echo "Logged-in users:"
           who || true
+
+          echo ""
+          echo "CGSession:"
+          /System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -s || true
 
           echo ""
           echo "WindowServer:"
@@ -170,6 +168,10 @@ jobs:
           pgrep -fl screensharingd || true
 
           echo ""
+          echo "VNCPrivilegeProxy:"
+          pgrep -fl VNCPrivilegeProxy || true
+
+          echo ""
           echo "Display information:"
           system_profiler SPDisplaysDataType 2>&1 || true
 
@@ -177,6 +179,94 @@ jobs:
           echo "=========================================="
           echo "END GUI SESSION DIAGNOSTICS"
           echo "=========================================="
+
+
+      # ============================================================
+      # SCREEN CAPTURE TEST
+      # ============================================================
+      - name: Test macOS Screen Capture
+        run: |
+          set +e
+
+          echo "=========================================="
+          echo "REAL macOS SCREEN CAPTURE TEST"
+          echo "=========================================="
+
+          CONSOLE_USER="$(stat -f "%Su" /dev/console)"
+          CONSOLE_UID="$(id -u "$CONSOLE_USER")"
+
+          echo ""
+          echo "Console user: $CONSOLE_USER"
+          echo "Console UID: $CONSOLE_UID"
+
+          echo ""
+          echo "Creating screenshot directory..."
+
+          mkdir -p "$RUNNER_TEMP/mac-screen-test"
+
+          SCREENSHOT="$RUNNER_TEMP/mac-screen-test/mac-screen.png"
+
+          echo ""
+          echo "Attempting screencapture..."
+
+          if [ "$CONSOLE_USER" = "root" ]; then
+            echo "WARNING: console user is root."
+            echo "This may indicate that no normal GUI user session is active."
+          fi
+
+          echo ""
+          echo "Running screencapture as console user..."
+
+          sudo -u "$CONSOLE_USER" \
+            /usr/sbin/screencapture \
+            -x \
+            -C \
+            "$SCREENSHOT"
+
+          CAPTURE_RESULT=$?
+
+          echo ""
+          echo "screencapture exit code: $CAPTURE_RESULT"
+
+          if [ -f "$SCREENSHOT" ]; then
+            echo ""
+            echo "SCREENSHOT FILE CREATED"
+            ls -lh "$SCREENSHOT"
+
+            echo ""
+            echo "Screenshot information:"
+            file "$SCREENSHOT" || true
+
+            echo ""
+            echo "Screenshot dimensions:"
+            sips -g pixelWidth -g pixelHeight "$SCREENSHOT" 2>&1 || true
+
+            echo ""
+            echo "Screenshot file size:"
+            stat -f "%z bytes" "$SCREENSHOT" || true
+          else
+            echo ""
+            echo "NO SCREENSHOT FILE WAS CREATED"
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "SCREEN CAPTURE TEST COMPLETE"
+          echo "=========================================="
+
+          exit 0
+
+
+      # ============================================================
+      # UPLOAD SCREENSHOT
+      # ============================================================
+      - name: Upload macOS Screen Capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-screen-test
+          path: ${{ runner.temp }}/mac-screen-test/
+          if-no-files-found: warn
 
 
       # ============================================================
@@ -217,131 +307,6 @@ jobs:
 
 
       # ============================================================
-      # SCREEN CAPTURE RESET
-      # ============================================================
-      - name: Reset macOS Screen Capture State
-        run: |
-          echo "=========================================="
-          echo "RESETTING MACOS SCREEN CAPTURE STATE"
-          echo "=========================================="
-
-          echo ""
-          echo "Current console user:"
-          stat -f "%Su" /dev/console || true
-
-          echo ""
-          echo "Resetting ScreenCapture privacy state..."
-
-          tccutil reset ScreenCapture 2>&1 || true
-          sudo tccutil reset ScreenCapture 2>&1 || true
-
-          echo ""
-          echo "Restarting screensharingd..."
-
-          sudo killall screensharingd 2>/dev/null || true
-
-          sleep 5
-
-          echo ""
-          echo "Restarting Remote Management agent..."
-
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -restart -agent -privs -all || true
-
-          sleep 5
-
-          echo ""
-          echo "Screen capture reset completed."
-
-          echo ""
-          echo "Current GUI processes:"
-          pgrep -fl WindowServer || true
-          pgrep -fl ARDAgent || true
-          pgrep -fl screensharingd || true
-          pgrep -fl VNCPrivilegeProxy || true
-
-
-      # ============================================================
-      # SCREEN CAPTURE DIAGNOSTICS
-      # ============================================================
-      - name: Diagnose Screen Capture
-        run: |
-          echo "=========================================="
-          echo "SCREEN CAPTURE DIAGNOSTICS"
-          echo "=========================================="
-
-          echo ""
-          echo "Console user:"
-          stat -f "%Su" /dev/console || true
-
-          echo ""
-          echo "Logged-in users:"
-          who || true
-
-          echo ""
-          echo "WindowServer:"
-          pgrep -fl WindowServer || true
-
-          echo ""
-          echo "ARDAgent:"
-          pgrep -fl ARDAgent || true
-
-          echo ""
-          echo "screensharingd:"
-          pgrep -fl screensharingd || true
-
-          echo ""
-          echo "VNCPrivilegeProxy:"
-          pgrep -fl VNCPrivilegeProxy || true
-
-          echo ""
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT PREFERENCES"
-          echo "=========================================="
-
-          sudo defaults read /Library/Preferences/com.apple.RemoteManagement 2>&1 || true
-
-          echo ""
-          echo "=========================================="
-          echo "VNC LEGACY FILE"
-          echo "=========================================="
-
-          sudo ls -l /Library/Preferences/com.apple.VNCSettings.txt 2>&1 || true
-
-          echo ""
-          echo "=========================================="
-          echo "TCC DATABASES"
-          echo "=========================================="
-
-          sudo ls -l "/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
-
-          ls -l "$HOME/Library/Application Support/com.apple.TCC/TCC.db" 2>&1 || true
-
-          echo ""
-          echo "=========================================="
-          echo "SCREENSHARING SERVICE"
-          echo "=========================================="
-
-          sudo launchctl print system/com.apple.screensharing 2>&1 || true
-
-          echo ""
-          echo "=========================================="
-          echo "RECENT SCREENSHARING / ARDAGENT LOGS"
-          echo "=========================================="
-
-          log show \
-            --last 10m \
-            --style compact \
-            --predicate '(process == "screensharingd") OR (process == "ARDAgent") OR (process == "VNCPrivilegeProxy")' \
-            2>&1 | tail -200 || true
-
-          echo ""
-          echo "=========================================="
-          echo "END SCREEN CAPTURE DIAGNOSTICS"
-          echo "=========================================="
-
-
-      # ============================================================
       # CONNECT MAC RUNNER TO TAILSCALE
       # ============================================================
       - name: Connect Mac to Tailscale
@@ -368,10 +333,6 @@ jobs:
           echo ""
           echo "Tailscale IPv4:"
           tailscale ip -4 || true
-
-          echo ""
-          echo "Tailscale IPv6:"
-          tailscale ip -6 || true
 
           echo ""
           echo "=========================================="

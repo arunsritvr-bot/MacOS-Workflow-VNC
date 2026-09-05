@@ -11,8 +11,13 @@ jobs:
     runs-on: macos-15-intel
 
     steps:
+
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
+
 
       # ============================================================
       # CONFIGURE macOS REMOTE MANAGEMENT / VNC
@@ -76,6 +81,7 @@ jobs:
 
           echo ""
           echo "Restarting Remote Management..."
+
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -restart -agent -privs -all || true
 
@@ -211,12 +217,12 @@ jobs:
 
 
       # ============================================================
-      # SCREEN CAPTURE / REMOTE MANAGEMENT AUTHORIZATION
+      # SCREEN CAPTURE RESET
       # ============================================================
-      - name: Diagnose Screen Capture Authorization
+      - name: Reset macOS Screen Capture State
         run: |
           echo "=========================================="
-          echo "SCREEN CAPTURE AUTHORIZATION DIAGNOSTICS"
+          echo "RESETTING MACOS SCREEN CAPTURE STATE"
           echo "=========================================="
 
           echo ""
@@ -224,7 +230,52 @@ jobs:
           stat -f "%Su" /dev/console || true
 
           echo ""
-          echo "Current GUI session:"
+          echo "Resetting ScreenCapture privacy state..."
+
+          tccutil reset ScreenCapture 2>&1 || true
+          sudo tccutil reset ScreenCapture 2>&1 || true
+
+          echo ""
+          echo "Restarting screensharingd..."
+
+          sudo killall screensharingd 2>/dev/null || true
+
+          sleep 5
+
+          echo ""
+          echo "Restarting Remote Management agent..."
+
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -restart -agent -privs -all || true
+
+          sleep 5
+
+          echo ""
+          echo "Screen capture reset completed."
+
+          echo ""
+          echo "Current GUI processes:"
+          pgrep -fl WindowServer || true
+          pgrep -fl ARDAgent || true
+          pgrep -fl screensharingd || true
+          pgrep -fl VNCPrivilegeProxy || true
+
+
+      # ============================================================
+      # SCREEN CAPTURE DIAGNOSTICS
+      # ============================================================
+      - name: Diagnose Screen Capture
+        run: |
+          echo "=========================================="
+          echo "SCREEN CAPTURE DIAGNOSTICS"
+          echo "=========================================="
+
+          echo ""
+          echo "Console user:"
+          stat -f "%Su" /dev/console || true
+
+          echo ""
+          echo "Logged-in users:"
           who || true
 
           echo ""
@@ -242,30 +293,6 @@ jobs:
           echo ""
           echo "VNCPrivilegeProxy:"
           pgrep -fl VNCPrivilegeProxy || true
-
-          echo ""
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT STATUS (ROOT)"
-          echo "=========================================="
-
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -status || true
-
-          echo ""
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT PRIVILEGES (ROOT)"
-          echo "=========================================="
-
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -getprivs || true
-
-          echo ""
-          echo "=========================================="
-          echo "REMOTE MANAGEMENT USER ACCESS"
-          echo "=========================================="
-
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -getaccess || true
 
           echo ""
           echo "=========================================="
@@ -292,6 +319,13 @@ jobs:
 
           echo ""
           echo "=========================================="
+          echo "SCREENSHARING SERVICE"
+          echo "=========================================="
+
+          sudo launchctl print system/com.apple.screensharing 2>&1 || true
+
+          echo ""
+          echo "=========================================="
           echo "RECENT SCREENSHARING / ARDAGENT LOGS"
           echo "=========================================="
 
@@ -314,6 +348,7 @@ jobs:
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
+
 
       # ============================================================
       # SHOW TAILSCALE ADDRESS
@@ -404,6 +439,7 @@ jobs:
           echo "=========================================="
           echo "REMOTE MAC INFORMATION"
           echo "=========================================="
+
           echo "Tailscale IP: $MAC_IP"
           echo "VNC Port: 5900"
           echo "Username: runner"
@@ -412,6 +448,7 @@ jobs:
           echo "=========================================="
           echo "WINDOWS TIGERVNC COMMAND"
           echo "=========================================="
+
           echo "vncviewer64-1.14.1.exe -SecurityTypes VncAuth -AutoSelect=0 -FullColor=1 -PreferredEncoding=Raw ${MAC_IP}:5900"
 
           echo ""
